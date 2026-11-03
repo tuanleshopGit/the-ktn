@@ -1,0 +1,1 @@
+{"name": "Thẻ KTN 1500", "short_name": "KTN 1500", "start_url": "./", "scope": "./", "display": "standalone", "background_color": "#f3f5fb", "theme_color": "#2443d6", "lang": "vi", "icons": [{"src": "icon.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"}]}
