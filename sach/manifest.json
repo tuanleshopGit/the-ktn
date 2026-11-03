@@ -1,0 +1,1 @@
+{"name": "Sách KTN", "short_name": "Sách KTN", "start_url": "./", "scope": "./", "display": "standalone", "background_color": "#f3f5fb", "theme_color": "#2443d6", "lang": "vi", "icons": [{"src": "icon.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"}]}
