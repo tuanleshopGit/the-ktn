@@ -112,7 +112,7 @@ select,input[type=search]{font:500 14px var(--f-ui);color:var(--ink);background:
     <button role="tab" id="tab-hoc" aria-selected="true" data-v="hoc">Học</button>
     <button role="tab" id="tab-on" aria-selected="false" data-v="on">Ôn</button>
     <button role="tab" id="tab-ban" aria-selected="false" data-v="ban">Bản đồ</button>
-    <button role="tab" id="tab-tra" aria-selected="false" data-v="tra">Tra từ</button>
+    <button role="tab" id="tab-tra" aria-selected="false" data-v="tra">Tra từ</button><!--RT--><button role="tab" id="tab-rt" aria-selected="false" data-v="rt">Rảnh tay</button><!--/RT-->
   </nav>
 
   <section id="v-hoc" class="wrap" style="padding:0;gap:12px">
@@ -146,6 +146,30 @@ select,input[type=search]{font:500 14px var(--f-ui);color:var(--ink);background:
     <input type="search" id="traO" placeholder="Gõ từ tiếng Anh hoặc nghĩa tiếng Việt…" aria-label="Tra từ">
     <div class="list" id="traKq"></div>
   </section>
+<!--RT-->
+  <section id="v-rt" hidden style="display:flex;flex-direction:column;gap:12px">
+    <div class="note">Bấm <b>Bắt đầu</b> rồi cất điện thoại. Máy đọc <b>nghĩa Việt → chờ Sếp tự nói tiếng Anh → đọc đáp án</b>, rồi đọc câu ví dụ và chừa chỗ để <mark>nói theo</mark>. Từ mới được hỏi lại sau 1 từ, sau 3 từ, rồi trộn ôn ở cuối lượt.</div>
+    <div class="row">
+      <select id="rtNguon" aria-label="Nghe từ đâu"><option value="hp">Học phần đang học</option><option value="kho">Từ cần ôn</option><option value="lon">Ôn trộn các học phần đã mở</option></select>
+      <select id="rtSo" aria-label="Số từ"><option value="10" selected>10 từ</option><option value="20">20 từ</option><option value="30">30 từ</option></select>
+    </div>
+    <div class="row">
+      <select id="rtChieu" aria-label="Chiều hỏi"><option value="va">Việt → Anh (tập nói)</option><option value="av">Anh → Việt (tập nghe)</option></select>
+      <select id="rtCho" aria-label="Thời gian chờ"><option value="2">chờ 2 giây</option><option value="3" selected>chờ 3 giây</option><option value="5">chờ 5 giây</option></select>
+      <button class="chip" id="rtNhai" aria-pressed="true">Nói theo câu</button>
+    </div>
+    <div class="meta" id="rtMoTa"></div>
+    <div class="card" id="rtThe" style="min-height:190px;cursor:default"></div>
+    <div class="row" style="justify-content:center">
+      <button class="btn" id="rtChay" style="flex:1">▶ Bắt đầu</button>
+      <button class="chip" id="rtBo">Bỏ qua ⏭</button>
+    </div>
+    <div class="row" style="justify-content:center">
+      <button class="chip" id="rtOn">Cần ôn</button><button class="chip" id="rtThuoc">Đã thuộc</button>
+    </div>
+    <button class="chip" id="rtTai">⬇ Tải lượt này thành 1 file mp3 (nghe khi tắt màn hình, lái xe)</button>
+    <div class="meta" id="rtTaiMoTa">Điện thoại tắt màn hình thì app có thể dừng, nhất là iPhone. File mp3 tải về nghe được bằng trình nghe nhạc, cả khi tắt màn hình.</div>
+  </section><!--/RT-->
 </div>
 
 <script>
@@ -285,12 +309,110 @@ function tra() {
 $('#traO').oninput = tra;
 $('#traKq').addEventListener('click', e => { const b = e.target.closest('[data-n]'); if (b) phat(+b.dataset.n, 'w'); });
 
+/*RT*/
+// ---- tab Rảnh tay: hỏi nghĩa, chờ, đáp, nói theo; nhắc lại giãn dần sau 1 và 3 từ ----
+const RT = {buoc: [], i: 0, chay: false, ds: []};
+const rtAu = new Audio(); rtAu.preload = 'auto';
+const rtTep = (x, k) => k === 'v' ? 'v/' + x.n + '.mp3' : x['a' + k] ? 'a/' + x['a' + k] + '.mp3' : null;
+function rtDs() {
+  const so = +$('#rtSo').value, ng = $('#rtNguon').value;
+  if (ng === 'kho') return tron(D.filter(x => S.m[x.n] === 1)).slice(0, so);
+  if (ng === 'lon') return tron(D.filter(x => S.hocHp.includes(x.hp))).slice(0, so);
+  const tu = D.filter(x => x.hp >= S.hp); return tu.slice(0, so);
+}
+function rtLich(ds) {
+  const cho = +$('#rtCho').value * 2, nhai = $('#rtNhai').getAttribute('aria-pressed') === 'true', va = $('#rtChieu').value === 'va';
+  const im = (n, x, pha) => Array.from({length: n}, () => ({src: 'v/lang.mp3', x, pha}));
+  const hoi = (x, pha) => va ? [{src: rtTep(x, 'v'), x, pha: 'hoi'}, ...im(cho, x, 'hoi'), {src: rtTep(x, 'w'), x, pha}, ...im(1, x, pha), {src: rtTep(x, 'w'), x, pha}]
+                                : [{src: rtTep(x, 'w'), x, pha: 'hoi'}, ...im(cho, x, 'hoi'), {src: rtTep(x, 'v'), x, pha}, ...im(1, x, pha), {src: rtTep(x, 'w'), x, pha}];
+  const moi = x => [...hoi(x, 'dap'), ...im(2, x, 'dap'), ...(x.ae ? [{src: rtTep(x, 'e'), x, pha: 'cau'}, ...(nhai ? [...im(Math.max(4, Math.round(x.ex.split(' ').length * 0.9)), x, 'nhai'), {src: rtTep(x, 'e'), x, pha: 'cau'}] : [])] : []), ...im(3, x, 'cau')];
+  const nhac = x => [...hoi(x, 'dap'), ...im(3, x, 'dap')];
+  let b = [];
+  ds.forEach((x, i) => { b.push(...moi(x)); if (i >= 1) b.push(...nhac(ds[i - 1])); if (i >= 3) b.push(...nhac(ds[i - 3])); });
+  if (ds.length > 1) tron(ds).forEach(x => b.push(...nhac(x)));
+  return b.filter(z => z.src);
+}
+function rtMoi() {
+  rtDung(); RT.ds = rtDs(); RT.buoc = rtLich(RT.ds); RT.i = 0;
+  const giay = RT.buoc.reduce((a, z) => a + (z.src === 'v/lang.mp3' ? 0.5 : z.pha === 'cau' ? 3.2 : 1.8), 0);
+  $('#rtMoTa').textContent = RT.ds.length ? `${RT.ds.length} từ (${RT.ds[0].n}–${RT.ds[RT.ds.length - 1].n}) · khoảng ${Math.round(giay / 60)} phút` : 'Chưa có từ nào ở mục này.';
+  rtThe(RT.ds[0], 'hoi');
+}
+function rtThe(x, pha) {
+  const el = $('#rtThe'); if (!x) { el.innerHTML = '<div class="meta">Chọn mục rồi bấm Bắt đầu.</div>'; return; }
+  const va = $('#rtChieu').value === 'va', an = pha === 'hoi';
+  const tren = va ? esc(x.vi) : `<b style="font-size:28px">${esc(x.w)}</b>`, duoi = va ? `<b style="font-size:28px">${esc(x.w)}</b> <span class="ipa">${esc(x.ipa)}</span>` : esc(x.vi);
+  el.innerHTML = `<span class="stt">từ số ${x.n} · HP ${String(x.hp).padStart(3, '0')}${S.m[x.n] === 2 ? ' · đã thuộc' : S.m[x.n] === 1 ? ' · cần ôn' : ''}</span>
+    <div style="margin-top:22px;font-size:20px">${tren}</div>
+    <div style="margin-top:12px;min-height:40px">${an ? '<span class="meta">… Sếp tự nói …</span>' : duoi}</div>
+    ${!an && x.ex ? `<div style="margin-top:10px">${esc(x.ex)}</div><div class="meta">${esc(x.exvi || '')}</div>` : ''}
+    ${pha === 'nhai' ? '<div class="meta" style="margin-top:8px">🗣 Nói theo câu…</div>' : ''}`;
+}
+function rtBuoc() {
+  if (!RT.chay) return;
+  if (RT.i >= RT.buoc.length) { rtDung(); $('#rtMoTa').textContent += ' · xong lượt'; return; }
+  const z = RT.buoc[RT.i++]; RT.x = z.x;
+  if (z.src !== 'v/lang.mp3' || !RT.vePha || RT.vePha !== z.pha + z.x.n) { rtThe(z.x, z.pha); RT.vePha = z.pha + z.x.n; }
+  if ('mediaSession' in navigator) navigator.mediaSession.metadata = new MediaMetadata({title: z.x.w, artist: z.x.vi, album: 'Thẻ KTN 1500 · Rảnh tay'});
+  rtAu.src = z.src; rtAu.play().catch(() => rtDung());
+}
+rtAu.onended = rtBuoc; rtAu.onerror = () => setTimeout(rtBuoc, 200);
+function rtDung() { RT.chay = false; rtAu.pause(); $('#rtChay').textContent = RT.i && RT.i < RT.buoc.length ? '▶ Nghe tiếp' : '▶ Bắt đầu'; }
+function rtBam() {
+  if (RT.chay) { rtDung(); return; }
+  if (!RT.buoc.length || RT.i >= RT.buoc.length) rtMoi();
+  if (!RT.buoc.length) return;
+  RT.chay = true; $('#rtChay').textContent = '⏸ Tạm dừng'; rtBuoc();
+}
+function rtBoQua() { if (!RT.x) return; const n = RT.x.n; while (RT.i < RT.buoc.length && RT.buoc[RT.i].x.n === n) RT.i++; if (RT.chay) { rtAu.pause(); rtBuoc(); } }
+function rtCham(v) { if (!RT.x) return; S.m[RT.x.n] = v; luu(); capNhatTong(); rtThe(RT.x, 'dap'); }
+$('#rtChay').onclick = rtBam; $('#rtBo').onclick = rtBoQua;
+$('#rtOn').onclick = () => rtCham(1); $('#rtThuoc').onclick = () => rtCham(2);
+$('#rtNhai').onclick = () => { const b = $('#rtNhai'); b.setAttribute('aria-pressed', b.getAttribute('aria-pressed') !== 'true'); rtMoi(); };
+['#rtNguon', '#rtSo', '#rtChieu', '#rtCho'].forEach(k => $(k).onchange = rtMoi);
+if ('mediaSession' in navigator) {
+  navigator.mediaSession.setActionHandler('play', () => { if (!RT.chay) rtBam(); });
+  navigator.mediaSession.setActionHandler('pause', () => { if (RT.chay) rtDung(); });
+  navigator.mediaSession.setActionHandler('nexttrack', rtBoQua);
+}
+function rtVe() { if (!RT.buoc.length) rtMoi(); }
+// ghép mp3: bỏ thẻ ID3 + khung Info đầu mỗi file rồi nối khung liền nhau (các file cùng 24 kHz mono)
+function rtDaiKhung(b, o) {
+  const ver = (b[o + 1] >> 3) & 3, br = (b[o + 2] >> 4) & 15, sr = (b[o + 2] >> 2) & 3, pad = (b[o + 2] >> 1) & 1;
+  const SR = {3: [44100, 48000, 32000], 2: [22050, 24000, 16000], 0: [11025, 12000, 8000]}[ver]; if (!SR || sr > 2) return 0;
+  const kb = (ver === 3 ? [0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320] : [0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160])[br];
+  return Math.floor((ver === 3 ? 144000 : 72000) * kb / SR[sr]) + pad;
+}
+function rtLoc(buf) {
+  const b = new Uint8Array(buf); let o = 0, e = b.length;
+  if (b[0] === 73 && b[1] === 68 && b[2] === 51) o = 10 + ((b[6] & 127) << 21 | (b[7] & 127) << 14 | (b[8] & 127) << 7 | (b[9] & 127));
+  while (o < e - 1 && !(b[o] === 255 && (b[o + 1] & 0xE0) === 0xE0)) o++;
+  const dau = String.fromCharCode(...b.subarray(o, o + 48));
+  if (dau.includes('Info') || dau.includes('Xing')) { const L = rtDaiKhung(b, o); if (L) o += L; }
+  if (e > 128 && b[e - 128] === 84 && b[e - 127] === 65 && b[e - 126] === 71) e -= 128;
+  return b.subarray(o, e);
+}
+async function rtTai() {
+  if (!RT.buoc.length) rtMoi(); if (!RT.buoc.length) return;
+  const nut = $('#rtTai'), kho = {}, ten = [...new Set(RT.buoc.map(z => z.src))]; nut.disabled = true;
+  try {
+    for (let k = 0; k < ten.length; k++) { nut.textContent = `Đang ghép ${k + 1}/${ten.length}…`; kho[ten[k]] = rtLoc(await (await fetch(ten[k])).arrayBuffer()); }
+    const blob = new Blob(RT.buoc.map(z => kho[z.src]), {type: 'audio/mpeg'});
+    const a = document.createElement('a'), d = RT.ds;
+    a.href = URL.createObjectURL(blob); a.download = `KTN1500 ${$('#rtChieu').value === 'va' ? 'Viet-Anh' : 'Anh-Viet'} tu ${d[0].n}-${d[d.length - 1].n}.mp3`;
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+    nut.textContent = '✓ Đã tải xong. Bấm để tải lại';
+  } catch (e) { nut.textContent = 'Tải lỗi, kiểm tra mạng rồi bấm lại'; }
+  nut.disabled = false;
+}
+$('#rtTai').onclick = rtTai;
+/*/RT*/
 // ---- chuyển tab + phím tắt ----
 let tab = 'hoc';
 function chonTab(v) {
   tab = v; document.querySelectorAll('nav.tabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.v === v));
-  ['hoc', 'on', 'ban', 'tra'].forEach(k => $('#v-' + k).hidden = k !== v);
-  if (v === 'on') batDauOn(); if (v === 'ban') veBan(); if (v === 'tra') tra();
+  ['hoc', 'on', 'ban', 'tra', 'rt'].forEach(k => $('#v-' + k).hidden = k !== v);
+  if (v === 'on') batDauOn(); if (v === 'ban') veBan(); if (v === 'tra') tra(); if (v === 'rt') rtVe();
 }
 document.querySelector('nav.tabs').addEventListener('click', e => { const b = e.target.closest('[data-v]'); if (b) chonTab(b.dataset.v); });
 document.addEventListener('keydown', e => {
